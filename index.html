@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#f7f9fc">
+<title>Aster VRM Mesh Transfer</title>
+<style>
+:root{color-scheme:light;--bg:#f5f7fb;--panel:#fff;--line:#dfe5ef;--ink:#20283a;--muted:#68748a;--accent:#657ee8;--soft:#edf1ff;--good:#16865b;--warn:#9a6715}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{padding:16px max(16px,env(safe-area-inset-left));background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;top:0;z-index:5}
+h1{font-size:18px;margin:0}header small{display:block;color:var(--muted);font-size:11px;letter-spacing:.08em}
+main{max-width:1250px;margin:auto;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,360px);gap:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}.panel h2{font-size:14px;margin:0;padding:12px 14px;border-bottom:1px solid var(--line)}
+.viewer{min-height:420px;position:relative;background:linear-gradient(180deg,#fbfcff,#edf1f7)}#viewport{height:520px;max-height:68vh;min-height:360px;touch-action:none}#viewport canvas{display:block;width:100%;height:100%}
+.viewerbar{display:flex;flex-wrap:wrap;gap:7px;padding:10px;border-top:1px solid var(--line)}
+.side{display:flex;flex-direction:column;gap:14px}.section{padding:12px 14px}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{min-width:0}
+button,.filebtn,select,input{font:inherit;border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:#fff;color:var(--ink)}
+button,.filebtn{cursor:pointer}button.primary{background:var(--accent);color:white;border-color:var(--accent)}button.active{background:var(--soft);border-color:#aab8ff;color:#354cba}
+button:disabled{opacity:.45;cursor:not-allowed}.filebtn{display:inline-flex;align-items:center;justify-content:center;gap:6px}.filebtn input{display:none}
+.small{font-size:12px;color:var(--muted)}.status{padding:10px 12px;border-radius:9px;background:#f0f3f9;color:#49566e;font-size:12px;margin-top:9px}.status.good{background:#eaf7f1;color:#176b4b}.status.warn{background:#fff6e7;color:#805514}
+.meshlist{max-height:230px;overflow:auto}.meshitem{width:100%;text-align:left;border:0;border-bottom:1px solid #edf0f5;border-radius:0;display:flex;justify-content:space-between;align-items:center;padding:10px 12px}.meshitem.selected{background:var(--soft);color:#354cba}.tag{font-size:10px;padding:3px 6px;border-radius:20px;background:#eef1f6;color:#58647a}.tag.warn{background:#fff0d6;color:#8a5b12}
+input[type=number]{width:82px;padding:7px}label.field{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+footer{max-width:1250px;margin:0 auto;padding:0 14px 22px;color:var(--muted);font-size:11px}
+@media(max-width:800px){main{grid-template-columns:1fr;padding:10px}.side{display:grid;grid-template-columns:1fr}#viewport{height:440px;max-height:58vh;min-height:330px}.viewer{min-height:0}header{padding:12px}}
+</style>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/","@pixiv/three-vrm":"https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.4.2/lib/three-vrm.module.min.js"}}
+</script>
+</head>
+<body>
+<header><div><h1>✦ Aster VRM Mesh Transfer</h1><small>MESH • SKELETON • OUTFIT WORKSHOP</small></div><span class="tag">EARLY BUILD</span></header>
+<main>
+<section class="panel">
+<h2>3D Preview — Target Model</h2>
+<div class="viewer"><div id="viewport"></div></div>
+<div class="viewerbar">
+<button id="moveBtn">Move</button><button id="rotateBtn" class="active">Rotate</button><button id="scaleBtn">Scale</button>
+<button id="frameBtn">Frame model</button><button id="clearSelectionBtn">Deselect</button>
+</div>
+<div class="section"><div class="row"><label class="filebtn">＋ Load Target (A)<input id="targetFile" type="file" accept=".vrm,.glb,.gltf"></label><label class="filebtn">＋ Load Source (B)<input id="sourceFile" type="file" accept=".vrm,.glb,.gltf"></label><button id="exportBtn" class="primary" disabled>Export GLB</button></div><div id="status" class="status">Load a target VRM/GLB model (A), then load a source model (B).</div></div>
+</section>
+<aside class="side">
+<section class="panel"><h2>Source Meshes — Model B</h2><div class="section small">Select a mesh to add it to the target. Static meshes are supported in this first build.</div><div id="sourceList" class="meshlist small">No source model loaded.</div></section>
+<section class="panel"><h2>Target Meshes — Model A</h2><div id="targetList" class="meshlist small">No target model loaded.</div><div class="section row"><button id="addBtn" class="primary" disabled>Add selected mesh</button><button id="replaceBtn" disabled>Replace selected target mesh</button></div></section>
+<section class="panel"><h2>Transform Editor</h2><div class="section">
+<div class="row"><label class="field">X <input id="tx" type="number" step="0.01" value="0"></label><label class="field">Y <input id="ty" type="number" step="0.01" value="0"></label><label class="field">Z <input id="tz" type="number" step="0.01" value="0"></label></div>
+<div class="row" style="margin-top:8px"><label class="field">Rot X° <input id="rx" type="number" step="1" value="0"></label><label class="field">Y° <input id="ry" type="number" step="1" value="0"></label><label class="field">Z° <input id="rz" type="number" step="1" value="0"></label></div>
+<div class="row" style="margin-top:8px"><label class="field">Scale X <input id="sx" type="number" step=".01" value="1"></label><label class="field">Y <input id="sy" type="number" step=".01" value="1"></label><label class="field">Z <input id="sz" type="number" step=".01" value="1"></label></div>
+<div class="row" style="margin-top:10px"><button id="applyTransformBtn" disabled>Apply values</button><button id="resetTransformBtn" disabled>Reset transform</button></div>
+<div class="status">Choose a target mesh to edit. Drag the gizmo in the preview or enter exact values. Uniform scale can be edited by entering the same value on all axes.</div>
+</div></section>
+<section class="panel"><h2>Compatibility notes</h2><div class="section small">This first build imports VRM/GLB and transfers static meshes. Skinned meshes are detected but intentionally blocked until bone remapping, skin weights and inverse bind matrices can be transferred safely. VRM export, Spring Bones, colliders and full Skeleton Merge are not implemented yet. Export GLB is a preview/interchange export, not a VRM file.</div></section>
+</aside>
+</main>
+<footer>Browser-based preview. Model files stay in this browser session; they are not uploaded to a server. Three.js and the VRM loader are loaded from a CDN, so an internet connection is required.</footer>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+const host=document.getElementById('viewport');
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0xf0f3f8);
+const camera=new THREE.PerspectiveCamera(40,1,.01,1000); camera.position.set(0,1.4,3.5);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false}); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); renderer.outputColorSpace=THREE.SRGBColorSpace; host.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0xffffff,0x8994aa,2));
+const key=new THREE.DirectionalLight(0xffffff,2.2); key.position.set(3,5,4); scene.add(key);
+const grid=new THREE.GridHelper(5,20,0xc4ccda,0xe0e5ed); scene.add(grid);
+const orbit=new OrbitControls(camera,renderer.domElement); orbit.enableDamping=true; orbit.target.set(0,1,0);
+const transform=new TransformControls(camera,renderer.domElement); transform.setMode('rotate'); scene.add(transform.getHelper());
+transform.addEventListener('dragging-changed',e=>orbit.enabled=!e.value);
+transform.addEventListener('objectChange',syncInputs);
+let targetRoot=null,sourceRoot=null,targetVRM=null,sourceVRM=null,selectedSource=null,selectedTarget=null;
+const targetMeshes=[],sourceMeshes=[];
+const $=id=>document.getElementById(id);
+function status(msg,type=''){ $('status').textContent=msg; $('status').className='status '+type; }
+function resize(){const w=host.clientWidth,h=host.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h,false)}
+new ResizeObserver(resize).observe(host); resize();
+function listMeshes(root,out){out.length=0;if(!root)return;root.traverse(o=>{if(o.isMesh)out.push(o)});}
+function meshLabel(m,i){return m.name||m.parent?.name||'Mesh '+(i+1)}
+function renderList(which){const arr=which==='source'?sourceMeshes:targetMeshes;const el=$(which==='source'?'sourceList':'targetList');el.innerHTML='';if(!arr.length){el.textContent='No '+(which==='source'?'source':'target')+' meshes loaded.';return;}arr.forEach((m,i)=>{const b=document.createElement('button');b.className='meshitem'+((which==='source'?m===selectedSource:m===selectedTarget)?' selected':'');const name=document.createElement('span');name.textContent=meshLabel(m,i);const tag=document.createElement('span');tag.className='tag'+(m.isSkinnedMesh?' warn':'');tag.textContent=m.isSkinnedMesh?'Skinned':'Static';b.append(name,tag);b.onclick=()=>{if(which==='source'){selectedSource=m;renderList('source');$('addBtn').disabled=!!m.isSkinnedMesh||!targetRoot;status(m.isSkinnedMesh?'This mesh is skinned. Safe skeleton transfer is not available in this build.':'Source mesh selected. Choose Add or Replace.');}else{selectTarget(m);}};el.appendChild(b);});}
+function selectTarget(m){selectedTarget=m;transform.detach();if(m)transform.attach(m);$('applyTransformBtn').disabled=!m;$('resetTransformBtn').disabled=!m;renderList('target');syncInputs();}
+function syncInputs(){const o=selectedTarget;if(!o)return;const p=o.position,r=o.rotation,s=o.scale;[['tx',p.x],['ty',p.y],['tz',p.z],['rx',THREE.MathUtils.radToDeg(r.x)],['ry',THREE.MathUtils.radToDeg(r.y)],['rz',THREE.MathUtils.radToDeg(r.z)],['sx',s.x],['sy',s.y],['sz',s.z]].forEach(([id,v])=>$(id).value=Number(v).toFixed(3));}
+function frame(root){const box=new THREE.Box3().setFromObject(root);if(box.isEmpty())return;const size=box.getSize(new THREE.Vector3()),center=box.getCenter(new THREE.Vector3());const max=Math.max(size.x,size.y,size.z)||1;camera.position.copy(center).add(new THREE.Vector3(max*.8,max*.35,max*2.5));orbit.target.copy(center);camera.near=Math.max(.001,max/1000);camera.far=max*100;camera.updateProjectionMatrix();orbit.update();}
+async function loadModel(file,kind){try{status('Loading '+file.name+'…');const loader=new GLTFLoader();loader.register(p=>new VRMLoaderPlugin(p));const data=await file.arrayBuffer();const gltf=await new Promise((resolve,reject)=>loader.parse(data,'',resolve,reject));const root=gltf.userData.vrm?.scene||gltf.scene;if(!root)throw new Error('No scene found in this file.');if(gltf.userData.vrm){VRMUtils.removeUnnecessaryVertices(gltf.userData.vrm.scene);VRMUtils.removeUnnecessaryJoints(gltf.userData.vrm.scene);}if(kind==='target'){if(targetRoot)scene.remove(targetRoot);targetRoot=root;targetVRM=gltf.userData.vrm||null;scene.add(root);listMeshes(root,targetMeshes);selectedTarget=null;transform.detach();renderList('target');$('exportBtn').disabled=false;frame(root);status('Target loaded: '+file.name+' ('+targetMeshes.length+' meshes).','good');}else{if(sourceRoot)scene.remove(sourceRoot);sourceRoot=root;sourceVRM=gltf.userData.vrm||null;scene.add(root);root.visible=false;listMeshes(root,sourceMeshes);selectedSource=null;renderList('source');$('addBtn').disabled=true;status('Source loaded: '+file.name+' ('+sourceMeshes.length+' meshes). Select a source mesh.','good');} }catch(e){console.error(e);status('Import failed: '+e.message,'warn');}}
+$('targetFile').onchange=e=>{if(e.target.files[0])loadModel(e.target.files[0],'target');e.target.value='';};
+$('sourceFile').onchange=e=>{if(e.target.files[0])loadModel(e.target.files[0],'source');e.target.value='';};
+function cloneStatic(src){const clone=new THREE.Mesh(src.geometry.clone(),Array.isArray(src.material)?src.material.map(m=>m.clone()):src.material.clone());clone.name=src.name||'TransferredMesh';src.updateWorldMatrix(true,false);targetRoot.updateWorldMatrix(true,false);const relative=new THREE.Matrix4().copy(targetRoot.matrixWorld).invert().multiply(src.matrixWorld);relative.decompose(clone.position,clone.quaternion,clone.scale);clone.castShadow=true;clone.receiveShadow=true;return clone;}
+function addMesh(replace){if(!selectedSource||!targetRoot)return;if(selectedSource.isSkinnedMesh){status('Cannot transfer this skinned mesh yet: Skeleton remapping is required.','warn');return;}if(replace&&(!selectedTarget||selectedTarget.isSkinnedMesh)){status('Select a static target mesh to replace.','warn');return;}const next=cloneStatic(selectedSource);if(replace){selectedTarget.parent.remove(selectedTarget);}targetRoot.add(next);listMeshes(targetRoot,targetMeshes);selectTarget(next);renderList('target');status(replace?'Mesh replaced. Check alignment and materials.':'Mesh added. Check alignment and materials.','good');}
+$('addBtn').onclick=()=>addMesh(false);$('replaceBtn').onclick=()=>addMesh(true);
+function refreshButtons(){$('addBtn').disabled=!selectedSource||selectedSource.isSkinnedMesh||!targetRoot;$('replaceBtn').disabled=!selectedSource||selectedSource.isSkinnedMesh||!targetRoot||!selectedTarget||selectedTarget.isSkinnedMesh;}
+const oldRender=renderList;renderList=function(which){oldRender(which);refreshButtons();};
+$('moveBtn').onclick=()=>setMode('translate');$('rotateBtn').onclick=()=>setMode('rotate');$('scaleBtn').onclick=()=>setMode('scale');
+function setMode(m){transform.setMode(m);['moveBtn','rotateBtn','scaleBtn'].forEach(id=>$(id).classList.toggle('active',id===({translate:'moveBtn',rotate:'rotateBtn',scale:'scaleBtn'}[m])));}
+$('frameBtn').onclick=()=>{if(selectedTarget)frame(selectedTarget);else if(targetRoot)frame(targetRoot);};
+$('clearSelectionBtn').onclick=()=>selectTarget(null);
+$('applyTransformBtn').onclick=()=>{if(!selectedTarget)return;selectedTarget.position.set(+$('tx').value,+$('ty').value,+$('tz').value);selectedTarget.rotation.set(THREE.MathUtils.degToRad(+$('rx').value),THREE.MathUtils.degToRad(+$('ry').value),THREE.MathUtils.degToRad(+$('rz').value));selectedTarget.scale.set(+$('sx').value,+$('sy').value,+$('sz').value);selectedTarget.updateMatrix();syncInputs();};
+$('resetTransformBtn').onclick=()=>{if(!selectedTarget)return;selectedTarget.position.set(0,0,0);selectedTarget.rotation.set(0,0,0);selectedTarget.scale.set(1,1,1);syncInputs();};
+$('exportBtn').onclick=async()=>{if(!targetRoot)return;try{status('Preparing GLB export…');const exporter=new GLTFExporter();const result=await exporter.parseAsync(targetRoot,{binary:true,onlyVisible:true});const blob=new Blob([result],{type:'model/gltf-binary'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='aster-mesh-transfer.glb';a.click();URL.revokeObjectURL(url);status('GLB exported. This is not a VRM export.','good');}catch(e){console.error(e);status('Export failed: '+e.message,'warn');}};
+function animate(){requestAnimationFrame(animate);orbit.update();renderer.render(scene,camera);}animate();
+</script>
+</body></html>
